@@ -65,6 +65,7 @@ const BASE_URL = 'https://clutch.co';
             const category = article.querySelector('li:nth-child(1) span:nth-child(2)') ?
               article.querySelector('li:nth-child(1) span:nth-child(2)').innerText.trim() : 'Not available';
 
+
             const confidential = article.querySelector('li:nth-child(2)') ?
               article.querySelector('li:nth-child(2)').innerText.trim() : 'Not available';
 
