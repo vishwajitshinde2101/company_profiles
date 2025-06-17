@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const XLSX = require('xlsx');
 
 const BASE_URL = 'https://clutch.co';
 
@@ -17,7 +18,17 @@ const BASE_URL = 'https://clutch.co';
   await page.setUserAgent(randomUserAgent);
 
   let currentPage = 1;
-  let totalPages = 581;  // You can dynamically adjust this or set it from pagination
+  let totalPages = 1;  // Limit to first 2 pages for testing
+
+  // Create a workbook and add a worksheet
+  const workbook = XLSX.utils.book_new();
+  const worksheetData = [];
+
+  // Adding headers to the worksheet
+  worksheetData.push([
+    'Category', 'Confidential', 'Date', 'Project Summary', 'Review', 'Feedback',
+    'Reviewer Position', 'Reviewer Name', 'Company Category', 'Location', 'Company Size'
+  ]);
 
   while (currentPage <= totalPages) {
     const url = `https://clutch.co/it-services/system-integrators?page=${currentPage}`;
@@ -121,6 +132,13 @@ const BASE_URL = 'https://clutch.co';
               console.log(`    Location: ${review.location}`);
               console.log(`    Company Size: ${review.companySize}`);
               console.log('_____________________________________________');
+
+              // Add review data to the worksheet
+              worksheetData.push([
+                review.category, review.confidential, review.date, review.projectSummary, review.review,
+                review.feedback, review.reviewerPosition, review.reviewerName, review.companyCategory,
+                review.location, review.companySize
+              ]);
             });
           }
         }
@@ -132,9 +150,17 @@ const BASE_URL = 'https://clutch.co';
       console.log(`⏩ Moving to next profile.`);
     }
 
-    currentPage++;
+    currentPage++;  // Move to the next page
     console.log(`➡️ Moving to next page: ${currentPage}`);
   }
+
+  // Create a worksheet from the collected data and write it to a file
+  const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Reviews Data");
+
+  // Save the workbook as an Excel file
+  XLSX.writeFile(wb, "clutch_reviews.xlsx");
 
   await browser.close();
   console.log('✅ Done opening all profile links and scraping reviews');
