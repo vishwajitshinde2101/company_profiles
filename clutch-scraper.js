@@ -2,6 +2,24 @@ const puppeteer = require('puppeteer');
 const XLSX = require('xlsx');
 
 const BASE_URL = 'https://clutch.co';
+const START_URL = 'https://clutch.co/in/it-services/system-integrators';
+
+async function safeGoto(page, url, retries = 3) {
+  while (retries > 0) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      return true; // Successfully loaded the page
+    } catch (err) {
+      console.log(`⚠️ Error loading page, retries left: ${retries}`);
+      retries--;
+      if (retries === 0) {
+        console.log('❌ Failed to load page after multiple retries');
+        return false; // Retry failed
+      }
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait before retrying
+    }
+  }
+}
 
 (async () => {
   const browser = await puppeteer.launch({
@@ -18,7 +36,7 @@ const BASE_URL = 'https://clutch.co';
   await page.setUserAgent(randomUserAgent);
 
   let currentPage = 1;
-  let totalPages = 1;
+  let totalPages = 1;  // Start with 1 and will be updated dynamically
 
   const workbook = XLSX.utils.book_new();
   const worksheetData = [];
@@ -30,7 +48,7 @@ const BASE_URL = 'https://clutch.co';
   ]);
 
   while (currentPage <= totalPages) {
-    const url = `https://clutch.co/it-services/system-integrators?page=${currentPage}`;
+    const url = `${START_URL}?page=${currentPage}`;
     console.log(`🔗 Scraping page: ${url}`);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -53,7 +71,11 @@ const BASE_URL = 'https://clutch.co';
       console.log(`➡️ Opening profile: ${fullUrl}`);
 
       const newPage = await browser.newPage();
-      await newPage.goto(fullUrl + "#reviews", { waitUntil: 'domcontentloaded', timeout: 60000 });
+      const success = await safeGoto(newPage, fullUrl + "#reviews", 3);
+      if (!success) {
+        console.log('⚠️ Skipping profile due to navigation failure.');
+        continue; // Skip to the next profile
+      }
 
       try {
         // Scrape the total number of review pages
@@ -149,7 +171,7 @@ const BASE_URL = 'https://clutch.co';
       console.log(`⏩ Moving to next profile.`);
     }
 
-    currentPage++;  // Move to the next page
+    currentPage++;
     console.log(`➡️ Moving to next page: ${currentPage}`);
   }
 
@@ -158,8 +180,11 @@ const BASE_URL = 'https://clutch.co';
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Reviews Data");
 
+  // Generate a dynamic file name using currentPage and totalPages
+  const fileName = `mgs-clutch-scraping-${currentPage - 1}-${totalPages}.xlsx`;
+
   // Save the workbook as an Excel file
-  XLSX.writeFile(wb, "clutch_reviews.xlsx");
+  XLSX.writeFile(wb, fileName);
 
   await browser.close();
   console.log('✅ Done opening all profile links and scraping reviews');
