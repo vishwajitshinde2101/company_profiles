@@ -18,9 +18,8 @@ const BASE_URL = 'https://clutch.co';
   await page.setUserAgent(randomUserAgent);
 
   let currentPage = 1;
-  let totalPages = 1;  // Limit to first 2 pages for testing
+  let totalPages = 1;
 
-  // Create a workbook and add a worksheet
   const workbook = XLSX.utils.book_new();
   const worksheetData = [];
 
