@@ -30,13 +30,12 @@ async function safeGoto(page, url, retries = 3) {
   });
 
   const page = await browser.newPage();
-
-  // Randomize User-Agent to mimic a real browser
   const randomUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
   await page.setUserAgent(randomUserAgent);
 
   let currentPage = 1;
-  let totalPages = 1;  // Start with 1 and will be updated dynamically
+  let totalPages = 50;
+  let pagesScraped = 0;
 
   const workbook = XLSX.utils.book_new();
   const worksheetData = [];
@@ -74,11 +73,10 @@ async function safeGoto(page, url, retries = 3) {
       const success = await safeGoto(newPage, fullUrl + "#reviews", 3);
       if (!success) {
         console.log('⚠️ Skipping profile due to navigation failure.');
-        continue; // Skip to the next profile
+        continue;
       }
 
       try {
-        // Scrape the total number of review pages
         const totalReviewPages = await newPage.$$eval(
           '#reviews .sg-accordion__contents .profile-reviews--list .profile-reviews--pagination a',
           links => {
@@ -88,41 +86,30 @@ async function safeGoto(page, url, retries = 3) {
         );
         console.log(`📝 Total Review Pages: ${totalReviewPages}`);
 
-        // Now we will handle the pagination and scrape reviews for each page
         for (let pageNum = 1; pageNum <= parseInt(totalReviewPages); pageNum++) {
           const reviewPageUrl = `${fullUrl}?page=${pageNum}#reviews`;
           console.log(`➡️ Opening reviews page: ${reviewPageUrl}`);
-
           await newPage.goto(reviewPageUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-          // Scrape reviews from the page
           const reviewsData = await newPage.$$eval(
             '#reviews .sg-accordion__contents #reviews-list article',
             articles => articles.map(article => {
               const category = article.querySelector('li:nth-child(1) span:nth-child(2)') ?
                 article.querySelector('li:nth-child(1) span:nth-child(2)').innerText.trim() : 'Not available';
-
               const confidential = article.querySelector('li:nth-child(2)') ?
                 article.querySelector('li:nth-child(2)').innerText.trim() : 'Not available';
-
               const date = article.querySelector('li:nth-child(3)') ?
                 article.querySelector('li:nth-child(3)').innerText.trim() : 'Not available';
-
               const projectSummary = article.querySelector('.profile-review__summary.mobile_hide p:nth-of-type(2)') ?
                 article.querySelector('.profile-review__summary.mobile_hide p:nth-of-type(2)').innerText.trim() : 'Not available';
-
               const review = article.querySelector('.profile-review__quote') ?
                 article.querySelector('.profile-review__quote').innerText.trim() : 'Not available';
-
               const feedback = article.querySelector('.profile-review__feedback.mobile_hide p:nth-of-type(2)') ?
                 article.querySelector('.profile-review__feedback.mobile_hide p:nth-of-type(2)').innerText.trim() : 'Not available';
-
               const reviewerPosition = article.querySelector('.profile-review__reviewer.mobile_hide div:nth-child(1)') ?
                 article.querySelector('.profile-review__reviewer.mobile_hide div:nth-child(1)').innerText.trim() : 'Not available';
-
               const reviewerName = article.querySelector('.profile-review__reviewer.mobile_hide .reviewer_card .reviewer_card--name') ?
                 article.querySelector('.profile-review__reviewer.mobile_hide .reviewer_card .reviewer_card--name').innerText.trim() : 'Not available';
-
               const reviewerDetails = article.querySelectorAll('.profile-review__reviewer.mobile_hide ul.reviewer_list li');
               const companyCategory = reviewerDetails[0] ? reviewerDetails[0].querySelector('span:nth-of-type(2)').innerText.trim() : 'Not available';
               const location = reviewerDetails[1] ? reviewerDetails[1].querySelector('span:nth-of-type(2)').innerText.trim() : 'Not available';
@@ -166,25 +153,23 @@ async function safeGoto(page, url, retries = 3) {
       } catch (err) {
         console.log('⚠️ Reviews section not found or timeout.');
       }
-
       await newPage.close();
       console.log(`⏩ Moving to next profile.`);
+    }
+
+    pagesScraped += 1; // Increase the number of pages scraped
+    if (pagesScraped % 5 === 0) {
+      const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Reviews Data");
+      const fileName = `mgs_clutch_data_scraping_${pagesScraped}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      console.log(`✅ Created file: ${fileName}`);
     }
 
     currentPage++;
     console.log(`➡️ Moving to next page: ${currentPage}`);
   }
-
-  // Create a worksheet from the collected data and write it to a file
-  const ws = XLSX.utils.aoa_to_sheet(worksheetData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Reviews Data");
-
-  // Generate a dynamic file name using currentPage and totalPages
-  const fileName = `mgs-clutch-scraping-${currentPage - 1}-${totalPages}.xlsx`;
-
-  // Save the workbook as an Excel file
-  XLSX.writeFile(wb, fileName);
 
   await browser.close();
   console.log('✅ Done opening all profile links and scraping reviews');
